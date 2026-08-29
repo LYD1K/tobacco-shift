@@ -495,6 +495,21 @@
         .shift-item .delete-btn:hover {
             background: #c9302c;
         }
+
+        .shift-item .unlock-btn {
+            background: #5cb85c;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .shift-item .unlock-btn:hover {
+            background: #4a8f4a;
+        }
     </style>
 </head>
 <body>
@@ -579,7 +594,7 @@
 
     <div class="modal" id="clearModal">
         <div class="modal-content">
-            <div class="modal-title">🗑 Очистка данных</div>
+            <div class="modal-title">🗑 Управление сменами</div>
             <div id="shiftsList" style="margin-bottom: 20px; max-height: 300px; overflow-y: auto;"></div>
             <div class="modal-buttons" style="flex-direction: column; gap: 10px;">
                 <button class="modal-btn cancel" id="deleteAllBtn" style="background: #d9534f; color: white;">🗑 Удалить все смены</button>
@@ -613,7 +628,8 @@
             transfer: [],
             ended: false,
             endCash: null,
-            startCash: 0
+            startCash: 0,
+            unlocked: false
         };
 
         let dateClickCount = 0;
@@ -642,7 +658,8 @@
                         transfer: [],
                         ended: false,
                         endCash: null,
-                        startCash: 0
+                        startCash: 0,
+                        unlocked: false
                     };
                     
                     const prevDate = new Date(currentDate);
@@ -697,7 +714,8 @@
                 transfer: [],
                 ended: false,
                 endCash: null,
-                startCash: 0
+                startCash: 0,
+                unlocked: false
             };
             
             await loadShiftData();
@@ -774,6 +792,16 @@
                 alert('Введите корректную сумму');
                 return;
             }
+            
+            const today = new Date();
+            const todayKey = getDateKey(today);
+            const currentKey = getDateKey(currentDate);
+            
+            if (currentKey > todayKey) {
+                alert('Нельзя вносить операции за будущий день!');
+                closeModal();
+                return;
+            }
 
             if (!currentShiftData[currentOperationType]) {
                 currentShiftData[currentOperationType] = [];
@@ -824,9 +852,9 @@
                 const today = new Date();
                 const todayKey = getDateKey(today);
                 const currentKey = getDateKey(currentDate);
-                const isPastDay = currentKey < todayKey;
+                const isFutureDay = currentKey > todayKey;
                 
-                if (!currentShiftData.ended && !isPastDay) {
+                if (!currentShiftData.ended && !isFutureDay) {
                     opElement.addEventListener('click', async function() {
                         if (confirm('Удалить операцию на ' + amount + ' ₽?')) {
                             operations.splice(index, 1);
@@ -864,13 +892,35 @@
             document.getElementById('cashRemainder').value = currentShiftData.startCash || 0;
         }
 
+        function canUnlock(dateKey) {
+            const today = new Date();
+            const todayKey = getDateKey(today);
+            
+            const [year, month, day] = dateKey.split('-').map(Number);
+            const shiftDate = new Date(year, month - 1, day);
+            
+            const diffDays = Math.floor((today - shiftDate) / (1000 * 60 * 60 * 24));
+            
+            return diffDays <= 3 && dateKey < todayKey;
+        }
+
         function checkShiftStatus() {
             const today = new Date();
             const todayKey = getDateKey(today);
             const currentKey = getDateKey(currentDate);
             const isPastDay = currentKey < todayKey;
+            const isFutureDay = currentKey > todayKey;
             
-            if (currentShiftData.ended) {
+            if (isFutureDay) {
+                document.getElementById('cashBtn').style.display = 'none';
+                document.getElementById('cardBtn').style.display = 'none';
+                document.getElementById('transferBtn').style.display = 'none';
+                document.getElementById('endShiftBtn').textContent = '📅 Будущий день';
+                document.getElementById('endShiftBtn').style.opacity = '0.5';
+                document.getElementById('endShiftBtn').style.pointerEvents = 'none';
+                document.getElementById('cashRemainder').disabled = true;
+                document.getElementById('unlockBtn').style.display = 'none';
+            } else if (currentShiftData.ended) {
                 document.getElementById('cashBtn').style.display = 'none';
                 document.getElementById('cardBtn').style.display = 'none';
                 document.getElementById('transferBtn').style.display = 'none';
@@ -878,16 +928,28 @@
                 document.getElementById('endShiftBtn').style.opacity = '0.5';
                 document.getElementById('endShiftBtn').style.pointerEvents = 'none';
                 document.getElementById('cashRemainder').disabled = true;
-                document.getElementById('unlockBtn').style.display = 'block';
-            } else if (isPastDay) {
+                
+                if (canUnlock(currentKey)) {
+                    document.getElementById('unlockBtn').style.display = 'block';
+                    document.getElementById('unlockBtn').textContent = '🔓 Разблокировать смену';
+                } else {
+                    document.getElementById('unlockBtn').style.display = 'none';
+                }
+            } else if (isPastDay && !currentShiftData.unlocked) {
                 document.getElementById('cashBtn').style.display = 'none';
                 document.getElementById('cardBtn').style.display = 'none';
                 document.getElementById('transferBtn').style.display = 'none';
-                document.getElementById('endShiftBtn').textContent = '📅 Прошлый день';
+                document.getElementById('endShiftBtn').textContent = '📅 Прошлый день (заблокирован)';
                 document.getElementById('endShiftBtn').style.opacity = '0.5';
                 document.getElementById('endShiftBtn').style.pointerEvents = 'none';
                 document.getElementById('cashRemainder').disabled = true;
-                document.getElementById('unlockBtn').style.display = 'none';
+                
+                if (canUnlock(currentKey)) {
+                    document.getElementById('unlockBtn').style.display = 'block';
+                    document.getElementById('unlockBtn').textContent = '🔓 Разблокировать смену';
+                } else {
+                    document.getElementById('unlockBtn').style.display = 'none';
+                }
             } else {
                 document.getElementById('cashBtn').style.display = 'block';
                 document.getElementById('cardBtn').style.display = 'block';
@@ -903,6 +965,7 @@
         async function unlockShift() {
             if (confirm('Разблокировать смену? Можно будет вносить изменения.')) {
                 currentShiftData.ended = false;
+                currentShiftData.unlocked = true;
                 currentShiftData.endCash = null;
                 currentShiftData.endedAt = null;
                 await saveShiftData();
@@ -935,13 +998,31 @@
                         const transferSum = (data.transfer || []).reduce((a, b) => a + (typeof b === 'number' ? b : b.amount || 0), 0);
                         const totalSum = cashSum + cardSum + transferSum;
                         
+                        const status = data.ended ? '✅ Завершена' : (data.unlocked ? '🔓 Разблокирована' : '🔒 Заблокирована');
+                        
                         shiftItem.innerHTML = `
                             <div>
                                 <div class="shift-date">${doc.id}</div>
-                                <div class="shift-info">${totalSum} ₽ · ${data.ended ? 'Завершена' : 'Активна'}</div>
+                                <div class="shift-info">${totalSum} ₽ · ${status}</div>
                             </div>
-                            <button class="delete-btn">Удалить</button>
+                            <div style="display: flex; gap: 5px;">
+                                <button class="unlock-btn">🔓</button>
+                                <button class="delete-btn">🗑</button>
+                            </div>
                         `;
+                        
+                        shiftItem.querySelector('.unlock-btn').addEventListener('click', async function() {
+                            if (canUnlock(doc.id) || doc.id === getDateKey(new Date())) {
+                                const newUnlocked = !data.unlocked;
+                                await db.collection('shifts').doc(doc.id).update({
+                                    unlocked: newUnlocked,
+                                    ended: newUnlocked ? false : data.ended
+                                });
+                                openClearMenu();
+                            } else {
+                                alert('Эту смену нельзя разблокировать (прошло больше 3 дней)');
+                            }
+                        });
                         
                         shiftItem.querySelector('.delete-btn').addEventListener('click', async function() {
                             if (confirm('Удалить смену за ' + doc.id + '?')) {
@@ -1023,8 +1104,8 @@
             const todayKey = getDateKey(today);
             const currentKey = getDateKey(currentDate);
             
-            if (currentKey < todayKey) {
-                alert('Нельзя завершить смену за прошлый день!');
+            if (currentKey > todayKey) {
+                alert('Нельзя завершить смену за будущий день!');
                 return;
             }
             
@@ -1035,6 +1116,7 @@
 
             currentShiftData.endCash = parseFloat(endCash) || 0;
             currentShiftData.ended = true;
+            currentShiftData.unlocked = false;
             currentShiftData.endedAt = new Date().toTimeString().slice(0, 5);
 
             const cashSum = (currentShiftData.cash || []).reduce((a, b) => a + (typeof b === 'number' ? b : b.amount || 0), 0);
