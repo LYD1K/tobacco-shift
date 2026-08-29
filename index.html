@@ -764,33 +764,36 @@
         }
 
         // Отправка в Telegram
-        async function sendToTelegram(message) {
-            const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-            
-            try {
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        chat_id: TELEGRAM_CHAT_ID,
-                        text: message,
-                        parse_mode: 'HTML'
-                    })
-                });
+        function sendToTelegram(message) {
+            return new Promise((resolve, reject) => {
+                const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage?chat_id=${TELEGRAM_CHAT_ID}&text=${encodeURIComponent(message)}&parse_mode=HTML`;
                 
-                const data = await response.json();
+                // Создаём невидимый iframe
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.src = url;
                 
-                if (data.ok) {
-                    return true;
-                } else {
-                    throw new Error(data.description || 'Ошибка Telegram API');
-                }
-            } catch (error) {
-                console.error('Ошибка отправки:', error);
-                throw error;
-            }
+                // Ждём загрузки iframe
+                iframe.onload = function() {
+                    document.body.removeChild(iframe);
+                    resolve(true);
+                };
+                
+                iframe.onerror = function() {
+                    document.body.removeChild(iframe);
+                    reject(new Error('Ошибка отправки'));
+                };
+                
+                document.body.appendChild(iframe);
+                
+                // Если за 5 секунд не загрузилось — считаем ошибкой
+                setTimeout(() => {
+                    if (document.body.contains(iframe)) {
+                        document.body.removeChild(iframe);
+                        reject(new Error('Таймаут отправки'));
+                    }
+                }, 5000);
+            });
         }
 
         // Завершение смены
