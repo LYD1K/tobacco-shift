@@ -503,7 +503,7 @@
     <script>
         // Конфигурация Telegram
         const TELEGRAM_BOT_TOKEN = '8822646062:AAHoB6CC-JdEa7-ZrKynoPJjdBVAMdnVsZ8';
-        const TELEGRAM_CHAT_ID = '-5587093103';
+        const TELEGRAM_CHAT_ID = '-1004480688357';
         
         // Данные
         let shifts = {};
@@ -763,12 +763,11 @@
             document.getElementById('totalSum').textContent = totalSum + ' ₽';
         }
 
-        // Отправка в Telegram через прокси
+        // Отправка в Telegram
         async function sendToTelegram(message) {
             const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
             
             try {
-                // Пробуем через прямой запрос
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: {
@@ -790,25 +789,7 @@
                 }
             } catch (error) {
                 console.error('Ошибка отправки:', error);
-                
-                // Пробуем через прокси
-                try {
-                    const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(
-                        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage?chat_id=${TELEGRAM_CHAT_ID}&text=${encodeURIComponent(message)}&parse_mode=HTML`
-                    );
-                    
-                    const proxyResponse = await fetch(proxyUrl);
-                    const proxyData = await proxyResponse.json();
-                    
-                    if (proxyData.ok) {
-                        return true;
-                    } else {
-                        throw new Error(proxyData.description || 'Ошибка через прокси');
-                    }
-                } catch (proxyError) {
-                    console.error('Ошибка через прокси:', proxyError);
-                    throw proxyError;
-                }
+                throw error;
             }
         }
 
