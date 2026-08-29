@@ -763,24 +763,29 @@
             document.getElementById('totalSum').textContent = totalSum + ' ₽';
         }
 
-        // Отправка в Telegram
-        function sendToTelegram(message) {
-            return new Promise((resolve) => {
-                const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+        // Отправка в Telegram через no-cors
+        async function sendToTelegram(message) {
+            const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+            
+            try {
+                await fetch(url, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        chat_id: TELEGRAM_CHAT_ID,
+                        text: message,
+                        parse_mode: 'HTML'
+                    })
+                });
                 
-                const formData = new FormData();
-                formData.append('chat_id', TELEGRAM_CHAT_ID);
-                formData.append('text', message);
-                formData.append('parse_mode', 'HTML');
-                
-                const sent = navigator.sendBeacon(url, formData);
-                
-                if (sent) {
-                    resolve(true);
-                } else {
-                    resolve(false);
-                }
-            });
+                return true;
+            } catch (error) {
+                console.error('Ошибка:', error);
+                throw error;
+            }
         }
 
         // Завершение смены
