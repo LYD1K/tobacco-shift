@@ -55,7 +55,6 @@
             min-height: 95vh;
         }
 
-        /* Шапка */
         .header {
             background: linear-gradient(180deg, #2a2a2a 0%, #222 100%);
             padding: 20px;
@@ -105,7 +104,6 @@
             border-color: var(--gold);
         }
 
-        /* Выбор кассира */
         .cashier-selector {
             display: flex;
             gap: 10px;
@@ -147,7 +145,6 @@
             text-shadow: 0 0 20px rgba(212, 168, 83, 0.3);
         }
 
-        /* Блок зарплаты */
         .salary-block {
             background: rgba(212, 168, 83, 0.1);
             border: 1px solid var(--gold-dark);
@@ -177,7 +174,6 @@
             margin-top: 5px;
         }
 
-        /* Остаток наличных */
         .cash-remainder {
             display: flex;
             align-items: center;
@@ -215,7 +211,6 @@
             cursor: not-allowed;
         }
 
-        /* Итоги по типам */
         .summary {
             display: flex;
             justify-content: space-around;
@@ -254,7 +249,6 @@
             color: var(--orange);
         }
 
-        /* Таблица операций */
         .operations {
             flex: 1;
             display: flex;
@@ -322,7 +316,6 @@
             padding: 15px 0;
         }
 
-        /* Кнопки ввода */
         .input-buttons {
             display: flex;
             gap: 8px;
@@ -357,7 +350,6 @@
             background: #b87a3a;
         }
 
-        /* Кнопка завершения */
         .end-shift {
             margin: 12px;
             padding: 14px;
@@ -376,7 +368,6 @@
             box-shadow: 0 0 20px rgba(212, 168, 83, 0.3);
         }
 
-        /* Модальное окно */
         .modal {
             display: none;
             position: fixed;
@@ -465,7 +456,6 @@
             color: white;
         }
 
-        /* Список смен в меню очистки */
         .shift-item {
             padding: 10px;
             background: #333;
@@ -509,7 +499,6 @@
 </head>
 <body>
     <div class="app">
-        <!-- Шапка -->
         <div class="header">
             <div class="date">
                 <button id="prevDay">←</button>
@@ -517,7 +506,6 @@
                 <button id="nextDay">→</button>
             </div>
             
-            <!-- Выбор кассира -->
             <div class="cashier-selector">
                 <button class="cashier-btn active" data-cashier="Елизавета">Елизавета</button>
                 <button class="cashier-btn" data-cashier="Соня">Соня</button>
@@ -527,20 +515,17 @@
             <div class="total" id="totalSum">0 ₽</div>
         </div>
 
-        <!-- Блок зарплаты -->
         <div class="salary-block">
             <div class="salary-label">💰 Зарплата</div>
             <div class="salary-value" id="salaryValue">1 500 ₽</div>
             <div class="salary-details" id="salaryDetails">Оклад: 1 500 ₽ + 5% от продаж</div>
         </div>
 
-        <!-- Остаток наличных -->
         <div class="cash-remainder">
             <label>Остаток наличных:</label>
             <input type="number" id="cashRemainder" placeholder="0" value="0">
         </div>
 
-        <!-- Итоги по типам -->
         <div class="summary">
             <div class="summary-item cash">
                 <div class="label">💵 Нал</div>
@@ -556,7 +541,6 @@
             </div>
         </div>
 
-        <!-- Таблица операций -->
         <div class="operations">
             <div class="column">
                 <div class="column-header">💵 НАЛ</div>
@@ -572,18 +556,16 @@
             </div>
         </div>
 
-        <!-- Кнопки ввода -->
         <div class="input-buttons">
             <button class="input-btn cash" id="cashBtn">💵 НАЛ</button>
             <button class="input-btn card" id="cardBtn">💳 КАРТА</button>
             <button class="input-btn transfer" id="transferBtn">📱 ПЕРЕВОД</button>
         </div>
 
-        <!-- Кнопка завершения -->
         <button class="end-shift" id="endShiftBtn">🔄 Завершить смену</button>
+        <button class="end-shift" id="unlockBtn" style="display: none; background: #6c757d; border-color: #6c757d;">🔓 Разблокировать смену</button>
     </div>
 
-    <!-- Модальное окно для ввода суммы -->
     <div class="modal" id="modal">
         <div class="modal-content">
             <div class="modal-title" id="modalTitle">Введите сумму</div>
@@ -595,7 +577,6 @@
         </div>
     </div>
 
-    <!-- Модальное окно очистки -->
     <div class="modal" id="clearModal">
         <div class="modal-content">
             <div class="modal-title">🗑 Очистка данных</div>
@@ -608,7 +589,6 @@
     </div>
 
     <script>
-        // Firebase конфигурация
         const firebaseConfig = {
             apiKey: "AIzaSyDqWKwiask8jbTCbyKmHwWCBwS8vbm2OL4",
             authDomain: "tobacco-shift.firebaseapp.com",
@@ -618,15 +598,12 @@
             appId: "1:498827469918:web:ec4ec50dde52fef1dd80cf"
         };
 
-        // Инициализация Firebase
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        // Telegram конфигурация
         const TELEGRAM_BOT_TOKEN = '8822646062:AAHoB6CC-JdEa7-ZrKynoPJjdBVAMdnVsZ8';
         const TELEGRAM_CHAT_ID = '-1004480688357';
 
-        // Данные
         let currentDate = new Date();
         let currentOperationType = null;
         let currentCashier = 'Елизавета';
@@ -639,11 +616,9 @@
             startCash: 0
         };
 
-        // Счётчик нажатий на дату
         let dateClickCount = 0;
         let dateClickTimer = null;
 
-        // Инициализация
         async function init() {
             updateDateDisplay();
             await loadShiftData();
@@ -652,7 +627,6 @@
             setupEventListeners();
         }
 
-        // Загрузка данных смены из Firebase
         async function loadShiftData() {
             const dateKey = getDateKey(currentDate);
             const docRef = db.collection('shifts').doc(dateKey);
@@ -689,7 +663,6 @@
             }
         }
 
-        // Сохранение данных смены в Firebase
         async function saveShiftData() {
             const dateKey = getDateKey(currentDate);
             const docRef = db.collection('shifts').doc(dateKey);
@@ -702,7 +675,6 @@
             }
         }
 
-        // Получение ключа даты
         function getDateKey(date) {
             const year = date.getFullYear();
             const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -710,13 +682,11 @@
             return year + '-' + month + '-' + day;
         }
 
-        // Обновление отображения даты
         function updateDateDisplay() {
             const options = { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' };
             document.getElementById('currentDate').textContent = currentDate.toLocaleDateString('ru-RU', options);
         }
 
-        // Переключение даты
         async function changeDay(delta) {
             currentDate.setDate(currentDate.getDate() + delta);
             updateDateDisplay();
@@ -735,7 +705,6 @@
             checkShiftStatus();
         }
 
-        // Настройка обработчиков событий
         function setupEventListeners() {
             document.getElementById('prevDay').addEventListener('click', () => changeDay(-1));
             document.getElementById('nextDay').addEventListener('click', () => changeDay(1));
@@ -756,13 +725,13 @@
             document.getElementById('confirmBtn').addEventListener('click', confirmOperation);
             
             document.getElementById('endShiftBtn').addEventListener('click', endShift);
+            document.getElementById('unlockBtn').addEventListener('click', unlockShift);
             
             document.getElementById('cashRemainder').addEventListener('change', function() {
                 currentShiftData.startCash = parseFloat(this.value) || 0;
                 saveShiftData();
             });
             
-            // Обработчик скрытого меню
             document.getElementById('currentDate').addEventListener('click', function() {
                 dateClickCount++;
                 clearTimeout(dateClickTimer);
@@ -780,7 +749,6 @@
             document.getElementById('deleteAllBtn').addEventListener('click', deleteAllShifts);
         }
 
-        // Открытие модального окна
         function openModal(type) {
             currentOperationType = type;
             const titles = {
@@ -794,13 +762,11 @@
             setTimeout(() => document.getElementById('modalInput').focus(), 100);
         }
 
-        // Закрытие модального окна
         function closeModal() {
             document.getElementById('modal').classList.remove('active');
             currentOperationType = null;
         }
 
-        // Подтверждение операции
         async function confirmOperation() {
             const amount = parseFloat(document.getElementById('modalInput').value);
             
@@ -827,14 +793,12 @@
             updateTotals();
         }
 
-        // Отображение операций
         function renderOperations() {
             renderColumn('cashOperations', currentShiftData.cash || []);
             renderColumn('cardOperations', currentShiftData.card || []);
             renderColumn('transferOperations', currentShiftData.transfer || []);
         }
 
-        // Отображение одной колонки
         function renderColumn(elementId, operations) {
             const element = document.getElementById(elementId);
             element.innerHTML = '';
@@ -880,7 +844,6 @@
             });
         }
 
-        // Обновление итогов
         function updateTotals() {
             const cashSum = (currentShiftData.cash || []).reduce((a, b) => a + (typeof b === 'number' ? b : b.amount || 0), 0);
             const cardSum = (currentShiftData.card || []).reduce((a, b) => a + (typeof b === 'number' ? b : b.amount || 0), 0);
@@ -897,26 +860,34 @@
             document.getElementById('salaryDetails').textContent = `Оклад: 1 500 ₽ + ${(totalSum * 0.05).toFixed(0)} ₽ (5%)`;
         }
 
-        // Обновление остатка наличных
         function updateCashRemainder() {
             document.getElementById('cashRemainder').value = currentShiftData.startCash || 0;
         }
 
-        // Проверка статуса смены
         function checkShiftStatus() {
             const today = new Date();
             const todayKey = getDateKey(today);
             const currentKey = getDateKey(currentDate);
             const isPastDay = currentKey < todayKey;
             
-            if (currentShiftData.ended || isPastDay) {
+            if (currentShiftData.ended) {
                 document.getElementById('cashBtn').style.display = 'none';
                 document.getElementById('cardBtn').style.display = 'none';
                 document.getElementById('transferBtn').style.display = 'none';
-                document.getElementById('endShiftBtn').textContent = isPastDay ? '📅 Прошлый день' : '✅ Смена завершена';
+                document.getElementById('endShiftBtn').textContent = '✅ Смена завершена';
                 document.getElementById('endShiftBtn').style.opacity = '0.5';
                 document.getElementById('endShiftBtn').style.pointerEvents = 'none';
                 document.getElementById('cashRemainder').disabled = true;
+                document.getElementById('unlockBtn').style.display = 'block';
+            } else if (isPastDay) {
+                document.getElementById('cashBtn').style.display = 'none';
+                document.getElementById('cardBtn').style.display = 'none';
+                document.getElementById('transferBtn').style.display = 'none';
+                document.getElementById('endShiftBtn').textContent = '📅 Прошлый день';
+                document.getElementById('endShiftBtn').style.opacity = '0.5';
+                document.getElementById('endShiftBtn').style.pointerEvents = 'none';
+                document.getElementById('cashRemainder').disabled = true;
+                document.getElementById('unlockBtn').style.display = 'none';
             } else {
                 document.getElementById('cashBtn').style.display = 'block';
                 document.getElementById('cardBtn').style.display = 'block';
@@ -925,10 +896,22 @@
                 document.getElementById('endShiftBtn').style.opacity = '1';
                 document.getElementById('endShiftBtn').style.pointerEvents = 'auto';
                 document.getElementById('cashRemainder').disabled = false;
+                document.getElementById('unlockBtn').style.display = 'none';
             }
         }
 
-        // Открытие меню очистки
+        async function unlockShift() {
+            if (confirm('Разблокировать смену? Можно будет вносить изменения.')) {
+                currentShiftData.ended = false;
+                currentShiftData.endCash = null;
+                currentShiftData.endedAt = null;
+                await saveShiftData();
+                checkShiftStatus();
+                renderOperations();
+                alert('✅ Смена разблокирована!');
+            }
+        }
+
         async function openClearMenu() {
             const modal = document.getElementById('clearModal');
             const list = document.getElementById('shiftsList');
@@ -976,12 +959,10 @@
             }
         }
 
-        // Закрытие меню очистки
         function closeClearMenu() {
             document.getElementById('clearModal').classList.remove('active');
         }
 
-        // Удаление всех смен
         async function deleteAllShifts() {
             if (confirm('⚠️ Удалить ВСЕ смены? Это действие нельзя отменить!')) {
                 if (confirm('Точно уверены? Все данные будут потеряны!')) {
@@ -1003,7 +984,6 @@
             }
         }
 
-        // Отправка в Telegram
         async function sendToTelegram(message) {
             const url = `/api/telegram/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
 
@@ -1033,7 +1013,6 @@
             }
         }
 
-        // Завершение смены
         async function endShift() {
             if (currentShiftData.ended) {
                 alert('Смена уже завершена!');
@@ -1127,7 +1106,6 @@
             checkShiftStatus();
         }
 
-        // Запуск
         init();
     </script>
 </body>
