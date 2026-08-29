@@ -763,29 +763,39 @@
             document.getElementById('totalSum').textContent = totalSum + ' ₽';
         }
 
-        // Отправка в Telegram через no-cors
-        async function sendToTelegram(message) {
-            const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-            
-            try {
-                await fetch(url, {
-                    method: 'POST',
-                    mode: 'no-cors',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        chat_id: TELEGRAM_CHAT_ID,
-                        text: message,
-                        parse_mode: 'HTML'
-                    })
-                });
+        // Отправка в Telegram через GET-запрос
+        function sendToTelegram(message) {
+            return new Promise((resolve, reject) => {
+                const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage?chat_id=${TELEGRAM_CHAT_ID}&text=${encodeURIComponent(message)}&parse_mode=HTML`;
                 
-                return true;
-            } catch (error) {
-                console.error('Ошибка:', error);
-                throw error;
-            }
+                const xhr = new XMLHttpRequest();
+                xhr.open('GET', url, true);
+                
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) {
+                        if (xhr.status === 200) {
+                            try {
+                                const data = JSON.parse(xhr.responseText);
+                                if (data.ok) {
+                                    resolve(true);
+                                } else {
+                                    reject(new Error(data.description || 'Ошибка Telegram API'));
+                                }
+                            } catch (e) {
+                                resolve(true);
+                            }
+                        } else {
+                            reject(new Error('Ошибка: ' + xhr.status));
+                        }
+                    }
+                };
+                
+                xhr.onerror = function() {
+                    reject(new Error('Ошибка сети'));
+                };
+                
+                xhr.send();
+            });
         }
 
         // Завершение смены
