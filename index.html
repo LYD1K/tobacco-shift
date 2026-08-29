@@ -764,38 +764,33 @@
         }
 
         // Отправка в Telegram через GET-запрос
-        function sendToTelegram(message) {
-            return new Promise((resolve, reject) => {
-                const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage?chat_id=${TELEGRAM_CHAT_ID}&text=${encodeURIComponent(message)}&parse_mode=HTML`;
+        async function sendToTelegram(message) {
+            const url = `/api/telegram/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+            
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        chat_id: TELEGRAM_CHAT_ID,
+                        text: message,
+                        parse_mode: 'HTML'
+                    })
+                });
                 
-                const xhr = new XMLHttpRequest();
-                xhr.open('GET', url, true);
+                const data = await response.json();
                 
-                xhr.onreadystatechange = function() {
-                    if (xhr.readyState === 4) {
-                        if (xhr.status === 200) {
-                            try {
-                                const data = JSON.parse(xhr.responseText);
-                                if (data.ok) {
-                                    resolve(true);
-                                } else {
-                                    reject(new Error(data.description || 'Ошибка Telegram API'));
-                                }
-                            } catch (e) {
-                                resolve(true);
-                            }
-                        } else {
-                            reject(new Error('Ошибка: ' + xhr.status));
-                        }
-                    }
-                };
-                
-                xhr.onerror = function() {
-                    reject(new Error('Ошибка сети'));
-                };
-                
-                xhr.send();
-            });
+                if (data.ok) {
+                    return true;
+                } else {
+                    throw new Error(data.description || 'Ошибка Telegram API');
+                }
+            } catch (error) {
+                console.error('Ошибка отправки:', error);
+                throw error;
+            }
         }
 
         // Завершение смены
