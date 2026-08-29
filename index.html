@@ -302,7 +302,7 @@
             font-weight: 600;
         }
 
-        .operation .time {
+        .operation .meta {
             font-size: 10px;
             color: var(--text-muted);
             margin-top: 2px;
@@ -598,6 +598,16 @@
                 if (doc.exists) {
                     currentShiftData = doc.data();
                 } else {
+                    // Очищаем данные
+                    currentShiftData = {
+                        cash: [],
+                        card: [],
+                        transfer: [],
+                        ended: false,
+                        endCash: null,
+                        startCash: 0
+                    };
+                    
                     // Пробуем подтянуть остаток с прошлой смены
                     const prevDate = new Date(currentDate);
                     prevDate.setDate(prevDate.getDate() - 1);
@@ -606,7 +616,6 @@
                     
                     if (prevDoc.exists && prevDoc.data().endCash) {
                         currentShiftData.startCash = prevDoc.data().endCash;
-                        document.getElementById('cashRemainder').value = currentShiftData.startCash;
                     }
                 }
                 renderOperations();
@@ -647,6 +656,17 @@
         async function changeDay(delta) {
             currentDate.setDate(currentDate.getDate() + delta);
             updateDateDisplay();
+            
+            // Очищаем текущие данные
+            currentShiftData = {
+                cash: [],
+                card: [],
+                transfer: [],
+                ended: false,
+                endCash: null,
+                startCash: 0
+            };
+            
             await loadShiftData();
             updateTotals();
             checkShiftStatus();
@@ -715,7 +735,8 @@
 
             const operation = {
                 amount: amount,
-                time: new Date().toTimeString().slice(0, 5)
+                time: new Date().toTimeString().slice(0, 5),
+                cashier: currentCashier
             };
 
             currentShiftData[currentOperationType].push(operation);
@@ -749,10 +770,11 @@
 
                 let amount = typeof op === 'number' ? op : op.amount;
                 let time = typeof op === 'number' ? '' : op.time;
+                let cashier = typeof op === 'number' ? '' : (op.cashier || '');
 
                 opElement.innerHTML = `
                     <div class="amount">${amount} ₽</div>
-                    ${time ? `<div class="time">${time}</div>` : ''}
+                    ${cashier || time ? `<div class="meta">${cashier}${cashier && time ? ' · ' : ''}${time}</div>` : ''}
                 `;
 
                 opElement.addEventListener('click', async function() {
@@ -795,11 +817,16 @@
 
         // Проверка статуса смены
         function checkShiftStatus() {
-            if (currentShiftData.ended) {
+            const today = new Date();
+            const todayKey = getDateKey(today);
+            const currentKey = getDateKey(currentDate);
+            const isPastDay = currentKey < todayKey;
+            
+            if (currentShiftData.ended || isPastDay) {
                 document.getElementById('cashBtn').style.display = 'none';
                 document.getElementById('cardBtn').style.display = 'none';
                 document.getElementById('transferBtn').style.display = 'none';
-                document.getElementById('endShiftBtn').textContent = '✅ Смена завершена';
+                document.getElementById('endShiftBtn').textContent = isPastDay ? '📅 Прошлый день' : '✅ Смена завершена';
                 document.getElementById('endShiftBtn').style.opacity = '0.5';
                 document.getElementById('endShiftBtn').style.pointerEvents = 'none';
             } else {
@@ -848,14 +875,23 @@
                 alert('Смена уже завершена!');
                 return;
             }
-
+            
+            // Проверяем, не прошлая ли это дата
+            const today = new Date();
+            const todayKey = getDateKey(today);
+            const currentKey = getDateKey(currentDate);
+            
+            if (currentKey < todayKey) {
+                alert('Нельзя завершить смену за прошлый день!');
+                return;
+            }
+            
             const endCash = prompt('Фактический остаток наличных в кассе:', currentShiftData.startCash || '0');
             if (endCash === null) {
                 return;
             }
 
             currentShiftData.endCash = parseFloat(endCash) || 0;
-            currentShiftData.cashier = currentCashier;
             currentShiftData.ended = true;
             currentShiftData.endedAt = new Date().toTimeString().slice(0, 5);
 
@@ -865,22 +901,60 @@
             const totalSales = cashSum + cardSum + transferSum;
             const salary = 1500 + (totalSales * 0.05);
 
+            // Считаем продажи по кассирам
+            const cashierStats = {};
+            const allOperations = [
+                ...(currentShiftData.cash || []),
+                ...(currentShiftData.card || []),
+                ...(currentShiftData.transfer || [])
+            ];
+
+            allOperations.forEach(op => {
+                if (typeof op === 'number') return;
+                const cashier = op.cashier || 'Неизвестно';
+                const amount = op.amount || 0;
+                if (!cashierStats[cashier]) {
+                    cashierStats[cashier] = { amount: 0, count: 0 };
+                }
+                cashierStats[cashier].amount += amount;
+                cashierStats[cashier].count++;
+            });
+
             await saveShiftData();
 
-            const message = `📊 <b>Смена ${getDateKey(currentDate)}</b>\n` +
-                `👤 Кассир: <b>${currentCashier}</b>\n` +
-                `═══════════════\n` +
-                `💰 <b>ЗАРПЛАТА: ${salary.toFixed(0)} ₽</b>\n` +
-                `═══════════════\n` +
-                `Остаток на начало: ${currentShiftData.startCash} ₽\n\n` +
-                `💵 Нал: +${cashSum} ₽\n` +
-                `💳 Карта: +${cardSum} ₽\n` +
-                `📱 Перевод: +${transferSum} ₽\n` +
-                `─────────────────\n` +
-                `Сумма продаж: ${totalSales} ₽\n` +
-                `─────────────────\n` +
-                `Остаток на конец: ${currentShiftData.endCash} ₽\n` +
-                `Завершена в: ${currentShiftData.endedAt}`;
+            // Формируем сообщение
+            let message = `📊 <b>Смена ${getDateKey(currentDate)}</b>\n`;
+            message += `═══════════════\n`;
+            
+            const uniqueCashiers = Object.keys(cashierStats);
+            
+            if (uniqueCashiers.length === 0) {
+                message += `💰 <b>ЗАРПЛАТА: ${salary.toFixed(0)} ₽</b>\n`;
+            } else if (uniqueCashiers.length === 1) {
+                message += `💰 <b>ЗАРПЛАТА: ${salary.toFixed(0)} ₽</b>\n`;
+                message += `═══════════════\n`;
+                message += `👤 ${uniqueCashiers[0]}: ${cashierStats[uniqueCashiers[0]].amount} ₽ (${cashierStats[uniqueCashiers[0]].count} оп.)\n`;
+            } else {
+                message += `💰 <b>ОБЩАЯ ЗАРПЛАТА: ${salary.toFixed(0)} ₽</b>\n`;
+                message += `═══════════════\n`;
+                uniqueCashiers.forEach(cashier => {
+                    const cashierSalary = (cashierStats[cashier].amount / totalSales) * salary;
+                    message += `👤 ${cashier}:\n`;
+                    message += `   Продажи: ${cashierStats[cashier].amount} ₽ (${cashierStats[cashier].count} оп.)\n`;
+                    message += `   Зарплата: ~${cashierSalary.toFixed(0)} ₽\n\n`;
+                });
+            }
+            
+            message += `═══════════════\n`;
+            message += `Остаток на начало: ${currentShiftData.startCash} ₽\n\n`;
+            message += `💵 Нал: +${cashSum} ₽\n`;
+            message += `💳 Карта: +${cardSum} ₽\n`;
+            message += `📱 Перевод: +${transferSum} ₽\n`;
+            message += `─────────────────\n`;
+            message += `Сумма продаж: ${totalSales} ₽\n`;
+            message += `─────────────────\n`;
+            message += `Остаток на конец: ${currentShiftData.endCash} ₽\n`;
+            message += `Завершена в: ${currentShiftData.endedAt}`;
 
             try {
                 await sendToTelegram(message);
