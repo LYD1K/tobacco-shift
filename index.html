@@ -208,6 +208,11 @@
             border-color: var(--gold);
         }
 
+        .cash-remainder input:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         /* Итоги по типам */
         .summary {
             display: flex;
@@ -614,12 +619,14 @@
                     const prevKey = getDateKey(prevDate);
                     const prevDoc = await db.collection('shifts').doc(prevKey).get();
                     
-                    if (prevDoc.exists && prevDoc.data().endCash) {
+                    if (prevDoc.exists && prevDoc.data().endCash !== null && prevDoc.data().endCash !== undefined) {
                         currentShiftData.startCash = prevDoc.data().endCash;
+                        await saveShiftData();
                     }
                 }
                 renderOperations();
                 updateCashRemainder();
+                updateTotals();
             } catch (error) {
                 console.error('Ошибка загрузки:', error);
             }
@@ -777,16 +784,25 @@
                     ${cashier || time ? `<div class="meta">${cashier}${cashier && time ? ' · ' : ''}${time}</div>` : ''}
                 `;
 
-                opElement.addEventListener('click', async function() {
-                    if (!currentShiftData.ended) {
+                // Проверяем, можно ли удалять
+                const today = new Date();
+                const todayKey = getDateKey(today);
+                const currentKey = getDateKey(currentDate);
+                const isPastDay = currentKey < todayKey;
+                
+                if (!currentShiftData.ended && !isPastDay) {
+                    opElement.addEventListener('click', async function() {
                         if (confirm('Удалить операцию на ' + amount + ' ₽?')) {
                             operations.splice(index, 1);
                             await saveShiftData();
                             renderOperations();
                             updateTotals();
                         }
-                    }
-                });
+                    });
+                    opElement.style.cursor = 'pointer';
+                } else {
+                    opElement.style.cursor = 'default';
+                }
 
                 element.appendChild(opElement);
             });
@@ -829,6 +845,7 @@
                 document.getElementById('endShiftBtn').textContent = isPastDay ? '📅 Прошлый день' : '✅ Смена завершена';
                 document.getElementById('endShiftBtn').style.opacity = '0.5';
                 document.getElementById('endShiftBtn').style.pointerEvents = 'none';
+                document.getElementById('cashRemainder').disabled = true;
             } else {
                 document.getElementById('cashBtn').style.display = 'block';
                 document.getElementById('cardBtn').style.display = 'block';
@@ -836,6 +853,7 @@
                 document.getElementById('endShiftBtn').textContent = '🔄 Завершить смену';
                 document.getElementById('endShiftBtn').style.opacity = '1';
                 document.getElementById('endShiftBtn').style.pointerEvents = 'auto';
+                document.getElementById('cashRemainder').disabled = false;
             }
         }
 
