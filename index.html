@@ -765,34 +765,21 @@
 
         // Отправка в Telegram
         function sendToTelegram(message) {
-            return new Promise((resolve, reject) => {
-                const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage?chat_id=${TELEGRAM_CHAT_ID}&text=${encodeURIComponent(message)}&parse_mode=HTML`;
+            return new Promise((resolve) => {
+                const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
                 
-                // Создаём невидимый iframe
-                const iframe = document.createElement('iframe');
-                iframe.style.display = 'none';
-                iframe.src = url;
+                const formData = new FormData();
+                formData.append('chat_id', TELEGRAM_CHAT_ID);
+                formData.append('text', message);
+                formData.append('parse_mode', 'HTML');
                 
-                // Ждём загрузки iframe
-                iframe.onload = function() {
-                    document.body.removeChild(iframe);
+                const sent = navigator.sendBeacon(url, formData);
+                
+                if (sent) {
                     resolve(true);
-                };
-                
-                iframe.onerror = function() {
-                    document.body.removeChild(iframe);
-                    reject(new Error('Ошибка отправки'));
-                };
-                
-                document.body.appendChild(iframe);
-                
-                // Если за 5 секунд не загрузилось — считаем ошибкой
-                setTimeout(() => {
-                    if (document.body.contains(iframe)) {
-                        document.body.removeChild(iframe);
-                        reject(new Error('Таймаут отправки'));
-                    }
-                }, 5000);
+                } else {
+                    resolve(false);
+                }
             });
         }
 
