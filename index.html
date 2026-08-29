@@ -763,30 +763,52 @@
             document.getElementById('totalSum').textContent = totalSum + ' ₽';
         }
 
-        // Отправка в Telegram
+        // Отправка в Telegram через прокси
         async function sendToTelegram(message) {
             const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
             
             try {
-                const formData = new FormData();
-                formData.append('chat_id', TELEGRAM_CHAT_ID);
-                formData.append('text', message);
-                formData.append('parse_mode', 'HTML');
-                
+                // Пробуем через прямой запрос
                 const response = await fetch(url, {
                     method: 'POST',
-                    body: formData
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        chat_id: TELEGRAM_CHAT_ID,
+                        text: message,
+                        parse_mode: 'HTML'
+                    })
                 });
                 
                 const data = await response.json();
                 
                 if (data.ok) {
-                    alert('✅ Итоги отправлены в Telegram!');
+                    return true;
                 } else {
-                    alert('❌ Ошибка отправки: ' + (data.description || 'неизвестная ошибка'));
+                    throw new Error(data.description || 'Ошибка Telegram API');
                 }
             } catch (error) {
-                alert('❌ Ошибка соединения: ' + error.message);
+                console.error('Ошибка отправки:', error);
+                
+                // Пробуем через прокси
+                try {
+                    const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(
+                        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage?chat_id=${TELEGRAM_CHAT_ID}&text=${encodeURIComponent(message)}&parse_mode=HTML`
+                    );
+                    
+                    const proxyResponse = await fetch(proxyUrl);
+                    const proxyData = await proxyResponse.json();
+                    
+                    if (proxyData.ok) {
+                        return true;
+                    } else {
+                        throw new Error(proxyData.description || 'Ошибка через прокси');
+                    }
+                } catch (proxyError) {
+                    console.error('Ошибка через прокси:', proxyError);
+                    throw proxyError;
+                }
             }
         }
 
@@ -862,11 +884,15 @@
                 `Завершена в: ${shift.endedAt}`;
             
             // Отправляем в Telegram
-            await sendToTelegram(message);
+            try {
+                await sendToTelegram(message);
+                alert('✅ Смена завершена!\n\nЗарплата: ' + salary.toFixed(0) + ' ₽\nОстаток наличных: ' + shift.endCash + ' ₽\n\nИтоги отправлены в Telegram!');
+            } catch (error) {
+                alert('⚠️ Смена завершена, но не удалось отправить в Telegram.\n\nЗарплата: ' + salary.toFixed(0) + ' ₽\nОстаток наличных: ' + shift.endCash + ' ₽\n\nОшибка: ' + error.message);
+            }
             
             // Обновляем интерфейс
             checkShiftStatus();
-            alert('✅ Смена завершена!\n\nЗарплата: ' + salary.toFixed(0) + ' ₽\nОстаток наличных: ' + shift.endCash + ' ₽');
         }
 
         // Ждем загрузки DOM перед инициализацией
