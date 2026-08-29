@@ -84,6 +84,8 @@
             justify-content: center;
             gap: 15px;
             margin-bottom: 10px;
+            cursor: pointer;
+            user-select: none;
         }
 
         .header .date button {
@@ -462,6 +464,47 @@
             background: #555;
             color: white;
         }
+
+        /* Список смен в меню очистки */
+        .shift-item {
+            padding: 10px;
+            background: #333;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s;
+        }
+
+        .shift-item:hover {
+            background: #3a3a3a;
+        }
+
+        .shift-item .shift-date {
+            font-size: 14px;
+            color: var(--text-primary);
+        }
+
+        .shift-item .shift-info {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .shift-item .delete-btn {
+            background: #d9534f;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .shift-item .delete-btn:hover {
+            background: #c9302c;
+        }
     </style>
 </head>
 <body>
@@ -540,7 +583,7 @@
         <button class="end-shift" id="endShiftBtn">🔄 Завершить смену</button>
     </div>
 
-    <!-- Модальное окно -->
+    <!-- Модальное окно для ввода суммы -->
     <div class="modal" id="modal">
         <div class="modal-content">
             <div class="modal-title" id="modalTitle">Введите сумму</div>
@@ -548,6 +591,18 @@
             <div class="modal-buttons">
                 <button class="modal-btn cancel" id="cancelBtn">Отмена</button>
                 <button class="modal-btn confirm" id="confirmBtn">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно очистки -->
+    <div class="modal" id="clearModal">
+        <div class="modal-content">
+            <div class="modal-title">🗑 Очистка данных</div>
+            <div id="shiftsList" style="margin-bottom: 20px; max-height: 300px; overflow-y: auto;"></div>
+            <div class="modal-buttons" style="flex-direction: column; gap: 10px;">
+                <button class="modal-btn cancel" id="deleteAllBtn" style="background: #d9534f; color: white;">🗑 Удалить все смены</button>
+                <button class="modal-btn cancel" id="closeClearBtn" style="background: #555;">Закрыть</button>
             </div>
         </div>
     </div>
@@ -584,6 +639,10 @@
             startCash: 0
         };
 
+        // Счётчик нажатий на дату
+        let dateClickCount = 0;
+        let dateClickTimer = null;
+
         // Инициализация
         async function init() {
             updateDateDisplay();
@@ -603,7 +662,6 @@
                 if (doc.exists) {
                     currentShiftData = doc.data();
                 } else {
-                    // Очищаем данные
                     currentShiftData = {
                         cash: [],
                         card: [],
@@ -613,7 +671,6 @@
                         startCash: 0
                     };
                     
-                    // Пробуем подтянуть остаток с прошлой смены
                     const prevDate = new Date(currentDate);
                     prevDate.setDate(prevDate.getDate() - 1);
                     const prevKey = getDateKey(prevDate);
@@ -664,7 +721,6 @@
             currentDate.setDate(currentDate.getDate() + delta);
             updateDateDisplay();
             
-            // Очищаем текущие данные
             currentShiftData = {
                 cash: [],
                 card: [],
@@ -705,6 +761,23 @@
                 currentShiftData.startCash = parseFloat(this.value) || 0;
                 saveShiftData();
             });
+            
+            // Обработчик скрытого меню
+            document.getElementById('currentDate').addEventListener('click', function() {
+                dateClickCount++;
+                clearTimeout(dateClickTimer);
+                dateClickTimer = setTimeout(() => {
+                    dateClickCount = 0;
+                }, 2000);
+                
+                if (dateClickCount >= 5) {
+                    dateClickCount = 0;
+                    openClearMenu();
+                }
+            });
+            
+            document.getElementById('closeClearBtn').addEventListener('click', closeClearMenu);
+            document.getElementById('deleteAllBtn').addEventListener('click', deleteAllShifts);
         }
 
         // Открытие модального окна
@@ -784,7 +857,6 @@
                     ${cashier || time ? `<div class="meta">${cashier}${cashier && time ? ' · ' : ''}${time}</div>` : ''}
                 `;
 
-                // Проверяем, можно ли удалять
                 const today = new Date();
                 const todayKey = getDateKey(today);
                 const currentKey = getDateKey(currentDate);
@@ -820,7 +892,6 @@
             document.getElementById('transferTotal').textContent = transferSum + ' ₽';
             document.getElementById('totalSum').textContent = totalSum + ' ₽';
 
-            // Обновляем зарплату
             const salary = 1500 + (totalSum * 0.05);
             document.getElementById('salaryValue').textContent = salary.toFixed(0) + ' ₽';
             document.getElementById('salaryDetails').textContent = `Оклад: 1 500 ₽ + ${(totalSum * 0.05).toFixed(0)} ₽ (5%)`;
@@ -854,6 +925,81 @@
                 document.getElementById('endShiftBtn').style.opacity = '1';
                 document.getElementById('endShiftBtn').style.pointerEvents = 'auto';
                 document.getElementById('cashRemainder').disabled = false;
+            }
+        }
+
+        // Открытие меню очистки
+        async function openClearMenu() {
+            const modal = document.getElementById('clearModal');
+            const list = document.getElementById('shiftsList');
+            list.innerHTML = '<div style="text-align: center; color: var(--text-muted);">Загрузка...</div>';
+            modal.classList.add('active');
+            
+            try {
+                const snapshot = await db.collection('shifts').get();
+                list.innerHTML = '';
+                
+                if (snapshot.empty) {
+                    list.innerHTML = '<div style="text-align: center; color: var(--text-muted);">Нет сохранённых смен</div>';
+                } else {
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        const shiftItem = document.createElement('div');
+                        shiftItem.className = 'shift-item';
+                        
+                        const cashSum = (data.cash || []).reduce((a, b) => a + (typeof b === 'number' ? b : b.amount || 0), 0);
+                        const cardSum = (data.card || []).reduce((a, b) => a + (typeof b === 'number' ? b : b.amount || 0), 0);
+                        const transferSum = (data.transfer || []).reduce((a, b) => a + (typeof b === 'number' ? b : b.amount || 0), 0);
+                        const totalSum = cashSum + cardSum + transferSum;
+                        
+                        shiftItem.innerHTML = `
+                            <div>
+                                <div class="shift-date">${doc.id}</div>
+                                <div class="shift-info">${totalSum} ₽ · ${data.ended ? 'Завершена' : 'Активна'}</div>
+                            </div>
+                            <button class="delete-btn">Удалить</button>
+                        `;
+                        
+                        shiftItem.querySelector('.delete-btn').addEventListener('click', async function() {
+                            if (confirm('Удалить смену за ' + doc.id + '?')) {
+                                await db.collection('shifts').doc(doc.id).delete();
+                                openClearMenu();
+                            }
+                        });
+                        
+                        list.appendChild(shiftItem);
+                    });
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки смен:', error);
+                list.innerHTML = '<div style="text-align: center; color: #d9534f;">Ошибка загрузки</div>';
+            }
+        }
+
+        // Закрытие меню очистки
+        function closeClearMenu() {
+            document.getElementById('clearModal').classList.remove('active');
+        }
+
+        // Удаление всех смен
+        async function deleteAllShifts() {
+            if (confirm('⚠️ Удалить ВСЕ смены? Это действие нельзя отменить!')) {
+                if (confirm('Точно уверены? Все данные будут потеряны!')) {
+                    try {
+                        const snapshot = await db.collection('shifts').get();
+                        const batch = db.batch();
+                        snapshot.forEach(doc => {
+                            batch.delete(doc.ref);
+                        });
+                        await batch.commit();
+                        alert('✅ Все смены удалены!');
+                        closeClearMenu();
+                        await loadShiftData();
+                    } catch (error) {
+                        console.error('Ошибка удаления:', error);
+                        alert('❌ Ошибка удаления!');
+                    }
+                }
             }
         }
 
@@ -894,7 +1040,6 @@
                 return;
             }
             
-            // Проверяем, не прошлая ли это дата
             const today = new Date();
             const todayKey = getDateKey(today);
             const currentKey = getDateKey(currentDate);
@@ -919,7 +1064,6 @@
             const totalSales = cashSum + cardSum + transferSum;
             const salary = 1500 + (totalSales * 0.05);
 
-            // Считаем продажи по кассирам
             const cashierStats = {};
             const allOperations = [
                 ...(currentShiftData.cash || []),
@@ -940,7 +1084,6 @@
 
             await saveShiftData();
 
-            // Формируем сообщение
             let message = `📊 <b>Смена ${getDateKey(currentDate)}</b>\n`;
             message += `═══════════════\n`;
             
