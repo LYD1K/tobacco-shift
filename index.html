@@ -651,6 +651,23 @@
                 const doc = await docRef.get();
                 if (doc.exists) {
                     currentShiftData = doc.data();
+                    
+                    // Если смена не завершена и нет операций — обновляем остаток с прошлой смены
+                    const hasOperations = (currentShiftData.cash || []).length > 0 || 
+                                          (currentShiftData.card || []).length > 0 || 
+                                          (currentShiftData.transfer || []).length > 0;
+                    
+                    if (!currentShiftData.ended && !hasOperations) {
+                        const prevDate = new Date(currentDate);
+                        prevDate.setDate(prevDate.getDate() - 1);
+                        const prevKey = getDateKey(prevDate);
+                        const prevDoc = await db.collection('shifts').doc(prevKey).get();
+                        
+                        if (prevDoc.exists && prevDoc.data().endCash !== null && prevDoc.data().endCash !== undefined) {
+                            currentShiftData.startCash = prevDoc.data().endCash;
+                            await saveShiftData();
+                        }
+                    }
                 } else {
                     currentShiftData = {
                         cash: [],
