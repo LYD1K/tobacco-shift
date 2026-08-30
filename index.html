@@ -181,7 +181,7 @@
             gap: 10px;
             padding: 10px;
             background: rgba(255,255,255,0.02);
-            margin: 0 15px 10px;
+            margin: 0 15px;
             border-radius: 8px;
         }
 
@@ -209,6 +209,18 @@
         .cash-remainder input:disabled {
             opacity: 0.5;
             cursor: not-allowed;
+        }
+
+        .cash-in-drawer {
+            text-align: center;
+            margin: 8px 15px 10px;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .cash-in-drawer span {
+            color: var(--gold);
+            font-weight: 600;
         }
 
         .summary {
@@ -510,6 +522,21 @@
         .shift-item .unlock-btn:hover {
             background: #4a8f4a;
         }
+
+        .end-shift-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .end-shift-info .label {
+            color: var(--text-secondary);
+        }
+
+        .end-shift-info .value {
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
@@ -539,6 +566,9 @@
         <div class="cash-remainder">
             <label>Остаток наличных:</label>
             <input type="number" id="cashRemainder" placeholder="0" value="0">
+        </div>
+        <div class="cash-in-drawer">
+            В кассе должно быть: <span id="cashInDrawer">0 ₽</span>
         </div>
 
         <div class="summary">
@@ -581,6 +611,7 @@
         <button class="end-shift" id="unlockBtn" style="display: none; background: #6c757d; border-color: #6c757d;">🔓 Разблокировать смену</button>
     </div>
 
+    <!-- Модальное окно для ввода суммы -->
     <div class="modal" id="modal">
         <div class="modal-content">
             <div class="modal-title" id="modalTitle">Введите сумму</div>
@@ -592,6 +623,44 @@
         </div>
     </div>
 
+    <!-- Модальное окно завершения смены -->
+    <div class="modal" id="endShiftModal">
+        <div class="modal-content">
+            <div class="modal-title">📊 Завершение смены</div>
+            
+            <div style="margin-bottom: 15px;">
+                <div class="end-shift-info">
+                    <span class="label">Остаток на начало:</span>
+                    <span class="value" id="endStartCash">0 ₽</span>
+                </div>
+                <div class="end-shift-info">
+                    <span class="label">Продажи наличными:</span>
+                    <span class="value" style="color: var(--green);" id="endCashSales">0 ₽</span>
+                </div>
+                <div class="end-shift-info">
+                    <span class="label">В кассе должно быть:</span>
+                    <span class="value" style="color: var(--gold);" id="endExpectedCash">0 ₽</span>
+                </div>
+                <hr style="border-color: #444; margin: 10px 0;">
+                <div class="end-shift-info">
+                    <span class="label">Зарплата:</span>
+                    <span class="value" style="color: var(--gold);" id="endSalary">0 ₽</span>
+                </div>
+            </div>
+            
+            <label style="display: block; margin-bottom: 8px; color: var(--text-secondary); font-size: 14px;">
+                Фактический остаток наличных в кассе:
+            </label>
+            <input type="number" class="modal-input" id="endCashInput" placeholder="0">
+            
+            <div class="modal-buttons" style="margin-top: 15px;">
+                <button class="modal-btn cancel" id="cancelEndShiftBtn">Отмена</button>
+                <button class="modal-btn confirm" id="confirmEndShiftBtn">✅ Завершить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно управления сменами -->
     <div class="modal" id="clearModal">
         <div class="modal-content">
             <div class="modal-title">🗑 Управление сменами</div>
@@ -652,7 +721,6 @@
                 if (doc.exists) {
                     currentShiftData = doc.data();
                     
-                    // Если смена не завершена и нет операций — обновляем остаток с прошлой смены
                     const hasOperations = (currentShiftData.cash || []).length > 0 || 
                                           (currentShiftData.card || []).length > 0 || 
                                           (currentShiftData.transfer || []).length > 0;
@@ -759,12 +827,16 @@
             document.getElementById('cancelBtn').addEventListener('click', closeModal);
             document.getElementById('confirmBtn').addEventListener('click', confirmOperation);
             
-            document.getElementById('endShiftBtn').addEventListener('click', endShift);
+            document.getElementById('endShiftBtn').addEventListener('click', openEndShiftModal);
+            document.getElementById('cancelEndShiftBtn').addEventListener('click', closeEndShiftModal);
+            document.getElementById('confirmEndShiftBtn').addEventListener('click', confirmEndShift);
+            
             document.getElementById('unlockBtn').addEventListener('click', unlockShift);
             
             document.getElementById('cashRemainder').addEventListener('change', function() {
                 currentShiftData.startCash = parseFloat(this.value) || 0;
                 saveShiftData();
+                updateTotals();
             });
             
             document.getElementById('currentDate').addEventListener('click', function() {
@@ -903,6 +975,11 @@
             const salary = 1500 + (totalSum * 0.05);
             document.getElementById('salaryValue').textContent = salary.toFixed(0) + ' ₽';
             document.getElementById('salaryDetails').textContent = `Оклад: 1 500 ₽ + ${(totalSum * 0.05).toFixed(0)} ₽ (5%)`;
+            
+            // Подсчёт наличных в кассе
+            const startCash = currentShiftData.startCash || 0;
+            const expectedCash = startCash + cashSum;
+            document.getElementById('cashInDrawer').textContent = expectedCash + ' ₽';
         }
 
         function updateCashRemainder() {
@@ -990,6 +1067,126 @@
                 renderOperations();
                 alert('✅ Смена разблокирована!');
             }
+        }
+
+        function openEndShiftModal() {
+            if (currentShiftData.ended) {
+                alert('Смена уже завершена!');
+                return;
+            }
+            
+            const today = new Date();
+            const todayKey = getDateKey(today);
+            const currentKey = getDateKey(currentDate);
+            
+            if (currentKey > todayKey) {
+                alert('Нельзя завершить смену за будущий день!');
+                return;
+            }
+            
+            const cashSum = (currentShiftData.cash || []).reduce((a, b) => a + (typeof b === 'number' ? b : b.amount || 0), 0);
+            const cardSum = (currentShiftData.card || []).reduce((a, b) => a + (typeof b === 'number' ? b : b.amount || 0), 0);
+            const transferSum = (currentShiftData.transfer || []).reduce((a, b) => a + (typeof b === 'number' ? b : b.amount || 0), 0);
+            const totalSales = cashSum + cardSum + transferSum;
+            const salary = 1500 + (totalSales * 0.05);
+            const expectedCash = (currentShiftData.startCash || 0) + cashSum;
+            
+            document.getElementById('endStartCash').textContent = (currentShiftData.startCash || 0) + ' ₽';
+            document.getElementById('endCashSales').textContent = cashSum + ' ₽';
+            document.getElementById('endExpectedCash').textContent = expectedCash + ' ₽';
+            document.getElementById('endSalary').textContent = salary.toFixed(0) + ' ₽';
+            document.getElementById('endCashInput').value = expectedCash;
+            
+            document.getElementById('endShiftModal').classList.add('active');
+            setTimeout(() => document.getElementById('endCashInput').focus(), 100);
+        }
+
+        function closeEndShiftModal() {
+            document.getElementById('endShiftModal').classList.remove('active');
+        }
+
+        async function confirmEndShift() {
+            const endCash = parseFloat(document.getElementById('endCashInput').value);
+            
+            if (isNaN(endCash) || endCash < 0) {
+                alert('Введите корректную сумму остатка');
+                return;
+            }
+            
+            document.getElementById('endShiftModal').classList.remove('active');
+            
+            currentShiftData.endCash = endCash;
+            currentShiftData.ended = true;
+            currentShiftData.unlocked = false;
+            currentShiftData.endedAt = new Date().toTimeString().slice(0, 5);
+            
+            const cashSum = (currentShiftData.cash || []).reduce((a, b) => a + (typeof b === 'number' ? b : b.amount || 0), 0);
+            const cardSum = (currentShiftData.card || []).reduce((a, b) => a + (typeof b === 'number' ? b : b.amount || 0), 0);
+            const transferSum = (currentShiftData.transfer || []).reduce((a, b) => a + (typeof b === 'number' ? b : b.amount || 0), 0);
+            const totalSales = cashSum + cardSum + transferSum;
+            const salary = 1500 + (totalSales * 0.05);
+            
+            const cashierStats = {};
+            const allOperations = [
+                ...(currentShiftData.cash || []),
+                ...(currentShiftData.card || []),
+                ...(currentShiftData.transfer || [])
+            ];
+            
+            allOperations.forEach(op => {
+                if (typeof op === 'number') return;
+                const cashier = op.cashier || 'Неизвестно';
+                const amount = op.amount || 0;
+                if (!cashierStats[cashier]) {
+                    cashierStats[cashier] = { amount: 0, count: 0 };
+                }
+                cashierStats[cashier].amount += amount;
+                cashierStats[cashier].count++;
+            });
+            
+            await saveShiftData();
+            
+            let message = `📊 <b>Смена ${getDateKey(currentDate)}</b>\n`;
+            message += `═══════════════\n`;
+            
+            const uniqueCashiers = Object.keys(cashierStats);
+            
+            if (uniqueCashiers.length === 0) {
+                message += `💰 <b>ЗАРПЛАТА: ${salary.toFixed(0)} ₽</b>\n`;
+            } else if (uniqueCashiers.length === 1) {
+                message += `💰 <b>ЗАРПЛАТА: ${salary.toFixed(0)} ₽</b>\n`;
+                message += `═══════════════\n`;
+                message += `👤 ${uniqueCashiers[0]}: ${cashierStats[uniqueCashiers[0]].amount} ₽ (${cashierStats[uniqueCashiers[0]].count} оп.)\n`;
+            } else {
+                message += `💰 <b>ОБЩАЯ ЗАРПЛАТА: ${salary.toFixed(0)} ₽</b>\n`;
+                message += `═══════════════\n`;
+                uniqueCashiers.forEach(cashier => {
+                    const cashierSalary = (cashierStats[cashier].amount / totalSales) * salary;
+                    message += `👤 ${cashier}:\n`;
+                    message += `   Продажи: ${cashierStats[cashier].amount} ₽ (${cashierStats[cashier].count} оп.)\n`;
+                    message += `   Зарплата: ~${cashierSalary.toFixed(0)} ₽\n\n`;
+                });
+            }
+            
+            message += `═══════════════\n`;
+            message += `Остаток на начало: ${currentShiftData.startCash} ₽\n\n`;
+            message += `💵 Нал: +${cashSum} ₽\n`;
+            message += `💳 Карта: +${cardSum} ₽\n`;
+            message += `📱 Перевод: +${transferSum} ₽\n`;
+            message += `─────────────────\n`;
+            message += `Сумма продаж: ${totalSales} ₽\n`;
+            message += `─────────────────\n`;
+            message += `Остаток на конец: ${currentShiftData.endCash} ₽\n`;
+            message += `Завершена в: ${currentShiftData.endedAt}`;
+            
+            try {
+                await sendToTelegram(message);
+                alert('✅ Смена завершена!\n\nЗарплата: ' + salary.toFixed(0) + ' ₽\nОстаток наличных: ' + currentShiftData.endCash + ' ₽\n\nИтоги отправлены в Telegram!');
+            } catch (error) {
+                alert('⚠️ Смена завершена, но не удалось отправить в Telegram.\n\nЗарплата: ' + salary.toFixed(0) + ' ₽\nОстаток наличных: ' + currentShiftData.endCash + ' ₽');
+            }
+            
+            checkShiftStatus();
         }
 
         async function openClearMenu() {
@@ -1109,100 +1306,6 @@
                 console.error('Ошибка отправки:', error);
                 throw error;
             }
-        }
-
-        async function endShift() {
-            if (currentShiftData.ended) {
-                alert('Смена уже завершена!');
-                return;
-            }
-            
-            const today = new Date();
-            const todayKey = getDateKey(today);
-            const currentKey = getDateKey(currentDate);
-            
-            if (currentKey > todayKey) {
-                alert('Нельзя завершить смену за будущий день!');
-                return;
-            }
-            
-            const endCash = prompt('Фактический остаток наличных в кассе:', currentShiftData.startCash || '0');
-            if (endCash === null) {
-                return;
-            }
-
-            currentShiftData.endCash = parseFloat(endCash) || 0;
-            currentShiftData.ended = true;
-            currentShiftData.unlocked = false;
-            currentShiftData.endedAt = new Date().toTimeString().slice(0, 5);
-
-            const cashSum = (currentShiftData.cash || []).reduce((a, b) => a + (typeof b === 'number' ? b : b.amount || 0), 0);
-            const cardSum = (currentShiftData.card || []).reduce((a, b) => a + (typeof b === 'number' ? b : b.amount || 0), 0);
-            const transferSum = (currentShiftData.transfer || []).reduce((a, b) => a + (typeof b === 'number' ? b : b.amount || 0), 0);
-            const totalSales = cashSum + cardSum + transferSum;
-            const salary = 1500 + (totalSales * 0.05);
-
-            const cashierStats = {};
-            const allOperations = [
-                ...(currentShiftData.cash || []),
-                ...(currentShiftData.card || []),
-                ...(currentShiftData.transfer || [])
-            ];
-
-            allOperations.forEach(op => {
-                if (typeof op === 'number') return;
-                const cashier = op.cashier || 'Неизвестно';
-                const amount = op.amount || 0;
-                if (!cashierStats[cashier]) {
-                    cashierStats[cashier] = { amount: 0, count: 0 };
-                }
-                cashierStats[cashier].amount += amount;
-                cashierStats[cashier].count++;
-            });
-
-            await saveShiftData();
-
-            let message = `📊 <b>Смена ${getDateKey(currentDate)}</b>\n`;
-            message += `═══════════════\n`;
-            
-            const uniqueCashiers = Object.keys(cashierStats);
-            
-            if (uniqueCashiers.length === 0) {
-                message += `💰 <b>ЗАРПЛАТА: ${salary.toFixed(0)} ₽</b>\n`;
-            } else if (uniqueCashiers.length === 1) {
-                message += `💰 <b>ЗАРПЛАТА: ${salary.toFixed(0)} ₽</b>\n`;
-                message += `═══════════════\n`;
-                message += `👤 ${uniqueCashiers[0]}: ${cashierStats[uniqueCashiers[0]].amount} ₽ (${cashierStats[uniqueCashiers[0]].count} оп.)\n`;
-            } else {
-                message += `💰 <b>ОБЩАЯ ЗАРПЛАТА: ${salary.toFixed(0)} ₽</b>\n`;
-                message += `═══════════════\n`;
-                uniqueCashiers.forEach(cashier => {
-                    const cashierSalary = (cashierStats[cashier].amount / totalSales) * salary;
-                    message += `👤 ${cashier}:\n`;
-                    message += `   Продажи: ${cashierStats[cashier].amount} ₽ (${cashierStats[cashier].count} оп.)\n`;
-                    message += `   Зарплата: ~${cashierSalary.toFixed(0)} ₽\n\n`;
-                });
-            }
-            
-            message += `═══════════════\n`;
-            message += `Остаток на начало: ${currentShiftData.startCash} ₽\n\n`;
-            message += `💵 Нал: +${cashSum} ₽\n`;
-            message += `💳 Карта: +${cardSum} ₽\n`;
-            message += `📱 Перевод: +${transferSum} ₽\n`;
-            message += `─────────────────\n`;
-            message += `Сумма продаж: ${totalSales} ₽\n`;
-            message += `─────────────────\n`;
-            message += `Остаток на конец: ${currentShiftData.endCash} ₽\n`;
-            message += `Завершена в: ${currentShiftData.endedAt}`;
-
-            try {
-                await sendToTelegram(message);
-                alert('✅ Смена завершена!\n\nЗарплата: ' + salary.toFixed(0) + ' ₽\nОстаток наличных: ' + currentShiftData.endCash + ' ₽\n\nИтоги отправлены в Telegram!');
-            } catch (error) {
-                alert('⚠️ Смена завершена, но не удалось отправить в Telegram.\n\nЗарплата: ' + salary.toFixed(0) + ' ₽\nОстаток наличных: ' + currentShiftData.endCash + ' ₽');
-            }
-
-            checkShiftStatus();
         }
 
         init();
